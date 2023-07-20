@@ -5,7 +5,6 @@ from tensorflow.keras import layers
 from tensorflow.keras import activations
 import sys
 
-# Define Contrastive VAE
 class CVAE(keras.Model):
     '''
     Creates fully supervised CVAE Class 
@@ -84,24 +83,50 @@ class VAE(keras.Model):
         "reconstruction_loss": self.reco_loss_tracker.result(),
         "kl_loss": self.kl_loss_tracker.result()}
 
-def build_encoder(): 
+def build_encoder(reconstruction=False): 
     '''
     Encoder as defined in gitlab: https://gitlab.cern.ch/cms-l1-ad/l1_anomaly_ae
-    Only returns μ since anomoloy detected by (μ)**2 values 
     '''
     latent_dim = 8
-    encoder_inputs = keras.Input(shape=(57,))
-
-    x = layers.Dense(32)(encoder_inputs)
+    enc_inputs = keras.Input(shape=(57,))
+    x = layers.Dense(32)(enc_inputs)
     x = layers.BatchNormalization()(x)
     x = layers.LeakyReLU()(x)
     x = layers.Dense(64)(x)
     x = layers.BatchNormalization()(x)
     x = layers.LeakyReLU()(x)
+    
+    if reconstruction: 
+        # If use for reconstruction returns μ, σ, and sampled point
+        z_mean = layers.Dense(latent_dim, name="z_mean")(x)
+        z_log_var = layers.Dense(latent_dim, name="z_log_var")(x)
+        z = Sample_Layer()([z_mean, z_log_var])
+        encoder = keras.Model(enc_inputs, [z_mean, z_log_var, z], name="encoder")
+        
+    else: 
+        # If no reconstruction, only returns μ as anomoloies are detected by (μ)**2 values 
+        z_mean = layers.Dense(latent_dim, name="z_mean")(x)
+        encoder = keras.Model(enc_inputs, z_mean, name="encoder")
+        return encoder
 
-    z_mean = layers.Dense(latent_dim, name="z_mean")(x)
-    encoder = keras.Model(encoder_inputs, z_mean, name="encoder")
-    return encoder
+def build_decoder(): 
+    '''
+    Decoder as defined in gitlab: https://gitlab.cern.ch/cms-l1-ad/l1_anomaly_ae 
+    '''
+    decoder_input = keras.Input(shape=(8,))
+    x = layers.Dense(16)(latent_input)
+    x = layers.LeakyReLU()(x)
+    x = layers.Dense(32)(x)
+    x = layers.LeakyReLU()(x)
+    x = layers.Dense(64)(x)
+    x = layers.LeakyReLU()(x)   
+    x = layers.Dense(128)(x)
+    x = layers.LeakyReLU()(x)
+    x = layers.Dense(57)(x)
+    x = layers.LeakyReLU()(x)
+    
+    decoder = keras.Model(latent_input, x, name="decoder")
+    decoder.summary()
 
 def build_projection_head(): 
     '''
@@ -114,4 +139,24 @@ def build_projection_head():
     projection = layers.Dense(8)(x)
     projection_head = keras.Model(projection_inputs, projection, name="projection_head")
     return projection_head
-    
+
+def build_classification_head(num_labels): 
+    '''
+    Build MLP classification head to map latent space represetnation to one of num_label events 
+    '''
+    latent_inputs = keras.Input(shape=(8,))
+    classes = layers.Dense(num_labels)(latent_inputs)
+    classification_head = keras.Model(latent_inputs, classes, name="classification_head")
+    return classification_head
+
+class Sample_Layer(layers.Layer):
+    '''
+    Builds custom sampling layer from gaussian distribution for VAE reconstruction 
+    '''
+    def call(self, inputs):
+        z_mean, z_log_var = inputs
+        batch = tf.shape(z_mean)[0]
+        dims = tf.shape(z_mean)[1]
+        epsilon = tf.random.normal(shape=(batch, dims))
+        return z_mean + tf.exp(0.5 * z_log_var) * epsilon
+        
