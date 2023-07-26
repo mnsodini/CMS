@@ -70,7 +70,7 @@ def fully_supervised():
         
         shuffled_background_representation  = tf.gather(background_representation, shuffled_background_indices)
         shuffled_background_labels = tf.gather(background_labels, shuffled_background_indices)
-        
+
         for key in anomaly_dataset.keys(): 
             print("Making the plot for", key)
             anomaly_representation = zscore_preprocess(anomaly_dataset[key])
@@ -80,15 +80,17 @@ def fully_supervised():
             if anomaly_labels.shape[0] > 100000: 
                 anomaly_representation = anomaly_representation[:100000]
                 anomaly_labels = anomaly_labels[:100000]
-            mixed_representation = tf.concat([shuffled_background_representation, anomaly_representation], axis=0)
+                
+            mixed_representation = np.concatenate([shuffled_background_representation, anomaly_representation], axis=0)
             mixed_labels = tf.concat([shuffled_background_labels, anomaly_labels], axis=0)
+            
             file_specs = f'A_{key}'
-            graphing_module.plot_2D_pca(mixed_representation, f'{args.plot_name}_2D_{file_specs}.png', 
-                                       labels = mixed_labels, anomaly = key)
-            graphing_module.plot_3D_pca(mixed_representation, f'{args.plot_name}_3D_{file_specs}.png', 
-                                       labels = mixed_labels, anomaly = key)
-#             graphing_module.plot_corner_plots(mixed_representation, f'{args.plot_name}_Corner_Plots.png', 
-#                                               mixed_labels, anomaly = key)
+            # graphing_module.plot_2D_pca(mixed_representation, f'{args.plot_name}_2D_{file_specs}.png', 
+                                       # labels = mixed_labels, anomaly = key)
+            # graphing_module.plot_3D_pca(mixed_representation, f'{args.plot_name}_3D_{file_specs}.png', 
+                                       # labels = mixed_labels, anomaly = key)
+            graphing_module.plot_corner_plots(mixed_representation, f'{args.plot_name}_Corner_Plots.png', 
+                                              mixed_labels, anomaly = key)
 
 
 if __name__ == '__main__':
@@ -99,7 +101,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', type=float, default=0.05)
     parser.add_argument('--loss_temp', type=float, default=0.07)
     parser.add_argument('--train_model', type=bool, default=False)
-    parser.add_argument('--make_model_plots', type=bool, default=True)
+    parser.add_argument('--make_model_plots', type=bool, default=False)
     parser.add_argument('--make_anomaly_plots', type=bool, default=True)
     parser.add_argument('--plot_name', type=str, default='0726')
     args = parser.parse_args()
