@@ -20,17 +20,16 @@ def monte_carlo_main():
     batch_size = 100
     learning_rate = 0.05
     temp = 0.7
-    make_plots = True
-    plot_name = 'AHHHHH'
-    model_name = None
-    create_latent = True
+    
+    create_latent = False
     create_classifier = False
+    make_plots = True
+    plot_name = '0725'
     
     print("pulling the data:")
     small_data = np.load('Data/large_divisions.npz')
     features_train = small_data['x_train']
     features_test = small_data['x_test']
-    labels_train = small_data['labels_train']
     labels_train = tf.reshape(small_data['labels_train'], (-1, 1))
     labels_test = tf.reshape(small_data['labels_test'], (-1, 1))
     
@@ -54,15 +53,18 @@ def monte_carlo_main():
                            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
         Classifier.fit(encoder.predict(features_train), labels_train, epochs=epochs, batch_size=batch_size) 
 
-    if make_plots == True: 
+    if make_plots: 
         print("making clustering plots:")
         file_specs = f'F_E{epochs}_B{batch_size}_L{learning_rate}_T{temp}'
-        test_representation = CVAE.encoder.predict(features_test)
-        specs = [epochs, batch_size, learning_rate]
-        graphing_module.plot_2D_pca(test_representation, f'{plot_name}_2D_{file_specs}.png')
-        graphing_module.plot_3D_pca(test_representation, f'{plot_name}_3D_{file_specs}.png')
-        graphing_module.plot_pca_proj(test_representation, f'{plot_name}_PCAProj_{file_specs}.png', labels = labels_test)
-
+        encoder = models.build_encoder()
+        encoder.load_weights("encoder_weights.h5")
+        test_representation = encoder.predict(features_test)
+        # specs = [epochs, batch_size, learning_rate]
+        # graphing_module.plot_2D_pca(test_representation, f'{plot_name}_2D_{file_specs}.png', labels = labels_test)
+        # graphing_module.plot_3D_pca(test_representation, f'{plot_name}_3D_{file_specs}.png', labels = labels_test)
+        # graphing_module.plot_pca_proj(test_representation, f'{plot_name}_PCAProj_{file_specs}.png', labels = labels_test)
+        graphing_module.plot_corner_plots(test_representation, f'{plot_name}_CornerPlot.png', labels_test)
+        
 
 if __name__ == '__main__':
     monte_carlo_main()
