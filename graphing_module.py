@@ -153,9 +153,9 @@ def plot_corner_plots(sample_representations, folder, filename, sample_labels, p
 
     plot_range = []
     for dim in range(num_dims): # Finds min and max range in each dim for histogram plots
-        plot_range.append([1.5 * min([min(representations[i].T[dim]) for i in range(num_labels)]),
-                           1.5 * max([max(representations[i].T[dim]) for i in range(num_labels)]),])
-    print("PLOT RANGE:", plot_range)
+            plot_range.append([-5,5,])
+#         plot_range.append([1.5 * min([min(representations[i].T[dim]) for i in range(num_labels)]),
+#                            1.5 * max([max(representations[i].T[dim]) for i in range(num_labels)]),])
     CORNER_KWARGS.update(range=plot_range) # Plots first rep to define baseline plot
     fig = corner.corner(representations[0], color=colors[0], **CORNER_KWARGS,
                         weights=normalize_weights(len(representations[0]), max_rep_count))

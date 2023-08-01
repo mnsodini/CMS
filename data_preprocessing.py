@@ -1,43 +1,57 @@
 print("Importing from 'data_preprocessing.py'")
+import os 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 
 def save_normalization_weights(input_array, filename): 
     '''
-    Assumes zscore preprocessing. Saves tuple of (μ, σ) in 'config.npy'
-    file under 'filename' key. Returns nothing. 
+    Assumes max_pt preprocessing. Saves max pT value in 'config.npy' file under 'filename' key. Returns nothing. 
     '''
-    # Loads input as tensor and computes mean and standard deviation
+    # Loads input as tensor and computes maximum pT value across all entries
     tensor = tf.convert_to_tensor(input_array, dtype = tf.float32)
-    mean = tf.reduce_mean(tensor, axis=0, keepdims=True)
-    std = tf.math.reduce_std(tensor, axis=0, keepdims=True)
-    print(mean.shape)
-    print(std.shape)
-    
+    max_pt = tf.reduce_max(tensor[:, :, 0, :])
+
     # Creates configs.npy if dne, otherwise, updates existing dict
     try: config_dict = np.load("configs.npy", allow_pickle=True).item()
     except FileNotFoundError: config_dict = {}
         
-    # Stores μ and σ vals in configs.npz dict. 
-    config_dict[filename] = (mean, std)
+    # Stores maximum pt value in configs.npz dict. 
+    config_dict[filename] = max_pt
     np.save('configs.npy', config_dict)
     
     
-def zscore_preprocess(input_array, filename):
+def maxPT_preprocess(input_array, filename):
     '''
-    Normalizes using zscore scaling along pT only ->  x' = (x - μ) / σ 
-    Assumes (μ, σ) saved in config.py file under filename key
+    Normalizes using max pT across pT only ->  x' = (x) / max(pT)
+    Assumes pT saved in config.py file under filename key
     '''
     # Loads input as tensor and (μ, σ) from configs. Applies zscore scaling
     tensor = tf.convert_to_tensor(input_array, dtype = tf.float32)
     configs_dict = np.load('configs.npy', allow_pickle=True).item()
-    mean, std = configs_dict[filename]
-    print(tensor.shape)
-    print((tensor-mean).shape)
-    print("before")
-    normalized_tensor = tf.math.divide_no_nan((tensor-mean), std)
-    print("after")
+    max_pT = configs_dict[filename]
+    normalized_tensor = tf.math.divide_no_nan(tensor, max_pT)
+
+    # Masking so unrecorded data remains 0
+    mask = tf.math.not_equal(tensor, 0)
+    mask = tf.cast(mask, tf.float32)
+    mask = tf.squeeze(mask, -1)
+    
+    # Outputs normalized pT while preserving original values for eta and phi. Applies mask 
+    outputs = tf.concat([normalized_tensor[:,:,0,:], tensor[:,:,1,:], tensor[:,:,2,:]], axis=2)
+    return tf.reshape(outputs * mask, (-1, 57))
+    
+    
+def zscore_preprocess(input_array):
+    '''
+    Normalizes using zscore scaling along pT only ->  x' = (x - μ) / σ 
+    Assumes (μ, σ) constants determined by average across training batch 
+    '''
+    # Loads input as tensor and (μ, σ) constants predetermined from training batch.
+    tensor = tf.convert_to_tensor(input_array, dtype = tf.float32)
+    mean = tf.reduce_mean(tensor, axis=1, keepdims=True) 
+    normalized_tensor = (tensor - 6.53298295) / 15.2869053
 
     # Masking so unrecorded data remains 0
     mask = tf.math.not_equal(tensor, 0)

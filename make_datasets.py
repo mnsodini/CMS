@@ -1,13 +1,14 @@
 print("Importing from 'make_datasets.py'")
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 import h5py
 import numpy as np
-import tensorflow as tf
 import data_preprocessing
 from argparse import ArgumentParser
+import tensorflow as tf
 
-def make_montecarlo_dataset(sample_size, filename, divisions): 
+def make_montecarlo_dataset(sample_size, new_filename, divisions, normalization_type): 
     '''
     Given Monte Carlo datasets and background IDs, make smaller dummy dataset for debugging
     If divisions, splits data to include fixed percent from each label in training data. 
@@ -33,36 +34,42 @@ def make_montecarlo_dataset(sample_size, filename, divisions):
             indices = np.random.choice(indices, size=label_sample_size, replace=replacement) 
             train_ix.extend(indices)
 
-    # Extract sample_size samples from relevant files and saves (μ, σ) and configs.py 
-    np.random.shuffle(train_ix)
-    data_preprocessing.save_normalization_weights(data['x_train'][train_ix], filename)
-    data_preprocessing.save_normalization_weights(data['x_test'][test_ix], filename)
-    
-    # Normalizes train and test data 
-    x_train = data_preprocessing.zscore_preprocess(data['x_train'][train_ix], filename)
-    x_test  = data_preprocessing.zscore_preprocess(data['x_test'][test_ix], filename)
+    # Extract sample_size samples from relevant files
+    np.random.shuffle(train_ix) 
+    x_train = data['x_train'][train_ix]
+    x_test  = data['x_test'][test_ix]
     id_train = labels['background_ID_train'][train_ix]
     id_test = labels['background_ID_test'][test_ix]
+    
+    if normalization_type == 'max_pt':
+        # Normalizes train and testing features by dividing by max pT. Saves weights in 'configs.py' file 
+        data_preprocessing.save_normalization_weights(x_train, new_filename)
+        x_train = data_preprocessing.maxPT_preprocess(x_train, new_filename)
+        x_test = data_preprocessing.maxPT_preprocess(x_test, new_filename)
 
-    # Create and save new .npz with extracted features 
+    elif normalization_type == 'zscore': 
+        # Normalizes train and testing features by x' = (x - μ) / σ, where μ, σ are predetermined constants
+        x_train = data_preprocessing.zscore_preprocess(x_train)
+        x_test = data_preprocessing.zscore_preprocess(x_test)
+
+    # Create and save new .npz with extracted features. Reports success 
     new_dataset = {'x_train': x_train, 'x_test': x_test, 'labels_train': id_train, 'labels_test': id_test}
-    if not os.path.exists('Data'): 
-        os.makedirs('Data')
-    subfolder_path = os.path.join('Data', filename)
-    np.savez(subfolder_path, **new_dataset)
-    
-    
-def make_raw_cms_dataset(cms_filename, new_filename): 
+    if not os.path.exists('Data'): os.makedirs('Data')
+    file_path = os.path.join('Data', new_filename)
+    np.savez(file_path, **new_dataset)
+    print(f"{file_path} successfully saved")
+
+def make_raw_cms_dataset(delphes_filter, new_filename, training_filename, normalization_type): 
     '''
     Given raw CMS, converts to npz file with appropriate transofmrations: 
     '''
-    raw_cms_file = h5py.File(cms_filename, 'r')
-    raw_data = raw_cms_file['full_data_cyl']
+    raw_cms_file = h5py.File('Data/raw_cms.h5', 'r')
+    dataset_np = np.array(raw_cms_file['full_data_cyl'])
 
-    delphes_filter = raw_cms_file['L1_SingleMu22']
-    dataset_np = np.array(raw_data)
-    filter_np  = np.array(delphes_filter)
-    dataset_np = dataset_np[filter_np]
+    if delphes_filter: 
+        delphes_filter = raw_cms_file['L1_SingleMu22']
+        filter_np  = np.array(delphes_filter)
+        dataset_np = dataset_np[filter_np]
     
     # Reordering and reshaping 
     dataset_np = data_preprocessing.transform_raw_cms(dataset_np)
@@ -74,25 +81,32 @@ def make_raw_cms_dataset(cms_filename, new_filename):
     dataset_np = tf.reshape(dataset_np, (-1, 19, 3, 1))
     dataset_np = data_preprocessing.phi_shift(dataset_np)
     
-    # Zscore normalization along pT axis 
+    # Either max_pT or zscore normalization. Reshapes/cast so shapes compatable 
     dataset_np = tf.reshape(dataset_np, (-1, 19, 3, 1))
     dataset_np = tf.cast(dataset_np, dtype=tf.float32)
     
-    data_preprocessing.save_normalization_weights(dataset_np, new_filename)
-    dataset_np = data_preprocessing.zscore_preprocess(dataset_np, new_filename)
+    if normalization_type == 'max_pt':
+        # Normalizes features by dividing by max pT. Uses training_filename to pull presaved max_pT weight
+        dataset_np = data_preprocessing.maxPT_preprocess(dataset_np, training_filename)
+    elif normalization_type == 'zscore': 
+        # Normalizes features by x' = (x - μ) / σ, where μ, σ are predetermined constants
+        dataset_np = data_preprocessing.zscore_preprocess(dataset_np)
     
-    subfolder_path = os.path.join('Data', filename)
+    # Saves files and reports sucess 
+    if not os.path.exists('Data'): os.makedirs('Data')
+    subfolder_path = os.path.join('Data', new_filename)
     np.savez(subfolder_path, dataset=dataset_np)
     raw_cms_file.close()
-    print("datset converted and saved as NPZ file")
+    print(f"{subfolder_path} successfully saved")
     
     
-def report_file_specs(filename, divisions):
-    print("loading")
+def report_file_specs(filename, divisions): 
+    '''
+    Reports file specs: keys, shape pairs. If divisions, also reports number of samples from each label represented 
+    in dataset 
+    '''
     data = np.load('Data/' + filename, mmap_mode='r')
-    print('printing da keys')
-    for key in data.keys(): 
-        print(f"Key: '{key}' Shape: '{data[key].shape}'")
+    for key in data.keys(): print(f"Key: '{key}' Shape: '{data[key].shape}'")
 
     if divisions != []: # prints frequency of each label
         label_counts = data['labels_train'].astype(int)
@@ -104,23 +118,26 @@ def report_file_specs(filename, divisions):
 if __name__ == '__main__':
     # Parses terminal command
     parser = ArgumentParser()
-    parser.add_argument('--filename', type=str, required=True)
-    parser.add_argument('--montecarlo', type=bool, default=True)
+    parser.add_argument('--new_filename', type=str, required=True)
+    parser.add_argument('--training_filename', type=str, default='max_pt_scaling.npz')
+    parser.add_argument('--delphes', type=bool, default=False)
     parser.add_argument('--sample_size', type=int, default=500000)
-    parser.add_argument('--cms_filename', type=str, default='raw_cms.h5')
+    parser.add_argument('--delphes_filter', type=bool, default=False)
+    parser.add_argument('--normalization_type', type=str, default='max_pt')
     args = parser.parse_args()
     
-    divisions = [0.3, 0.3, 0.2, 0.2]
+    divisions = []
+#     divisions = [0.30, 0.30, 0.20, 0.20]
     
     print("Creating file now:")
-    if args.montecarlo == True: 
-        print("Assuming making monte carlo dataset")
-        make_montecarlo_dataset(args.sample_size, args.filename, divisions)
+    if args.delphes == True: 
+        print("Assuming making a Delphes Data Subset:")
+        make_montecarlo_dataset(args.sample_size, args.filename, divisions, args.normalization_type)
     else: 
-        print("Assuming making raw cms dataset")
-        make_raw_cms_dataset(args.cms_filename, args.filename)
+        print("Assuming making a Raw CMS Dataset:")
+        make_raw_cms_dataset(args.delphes_filter, args.new_filename, args.training_filename, args.normalization_type)
     
     print("File Specs:")
-    report_file_specs(args.filename, divisions)
+    report_file_specs(args.new_filename, divisions)
     
     
