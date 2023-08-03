@@ -6,24 +6,23 @@ import h5py
 import models
 import numpy as np
 import tensorflow as tf
+import data_preprocessing
 from tensorflow import keras
 from argparse import ArgumentParser
 from graphing_module import plot_ROC
-from data_preprocessing import maxPT_preprocess
 
-
-def classifier_main(latent_dim, encoder_name, folder, filename):
+def classifier_main(training_data_name, latent_dim, encoder_name, folder, normalization_type):
     '''
     Builds and trains DNN classifier to distinguish background (0 labeled) vs anomalies (1 labeled)
     Plots ROC to visualize efficiacy 
     '''
     # Builds the encoder using pretrained weights 
-    encoder = models.build_encoder()
+    encoder = models.build_encoder(latent_dim)
     encoder.load_weights("Saved_Weights/" + encoder_name)
     
     print("=======================")
     print("PULLING BACKGROUND DATA")
-    background_features_dataset = np.load('Data/large_divisions.npz')
+    background_features_dataset = np.load('Data/' + training_data_name)
     background_features_train = encoder.predict(background_features_dataset['x_train'])
     background_features_test = encoder.predict(background_features_dataset['x_test'])
     
@@ -39,7 +38,11 @@ def classifier_main(latent_dim, encoder_name, folder, filename):
     #Creates dictionary mapping anomalies to latent space representations
     anomaly_mapping = {} 
     for anomaly in anomaly_list: 
-        prediction = maxPT_preprocess(anomaly_dataset[anomaly], filename)
+        if normalization_type == 'max_pt': 
+            prediction = data_preprocessing.maxPT_preprocess(anomaly_dataset[anomaly], training_data_name)
+        elif normalization_type == 'zscore': 
+            prediction = data_preprocessing.zscore_preprocess(anomaly_dataset[anomaly])
+            
         prediction = encoder.predict(prediction)
         anomaly_mapping[anomaly] = prediction
 
@@ -58,9 +61,9 @@ def classifier_main(latent_dim, encoder_name, folder, filename):
         print("==============================")
         print(f"TRAINING USING {anomaly} DATA")
         classifier = models.build_classification_head(latent_dim)
-        classifier.compile(optimizer=keras.optimizers.Adam(learning_rate=0.05, amsgrad=True),
+        classifier.compile(optimizer=keras.optimizers.Adam(learning_rate=0.005, amsgrad=True),
                            loss=tf.keras.losses.BinaryCrossentropy(from_logits = False), metrics=['accuracy'])
-        classifier.fit(mixed_representation, mixed_labels, epochs=5, batch_size=1026) 
+        classifier.fit(mixed_representation, mixed_labels, epochs=5, batch_size=100) 
 
         # Uses classifier to label anomalous and testing background for evaluation. Updates graphing dicts 
         print("=============================")
@@ -77,19 +80,20 @@ if __name__ == '__main__':
     # Includes standard args used for storing graphs within correct subfolder
     parser = ArgumentParser()
     parser.add_argument('--full_data', type=bool, default=False)
-    parser.add_argument('--subset_data_name', type=str, default='max_pt_scaling.npz')
+    parser.add_argument('--training_data_name', type=str, default='max_pt.npz')
     
     parser.add_argument('--latent_dim', type=int, default=8)
     parser.add_argument('--epochs', type=int, default=10)
-    parser.add_argument('--batch_size', type=int, default=1082)
+    parser.add_argument('--batch_size', type=int, default=1048)
     parser.add_argument('--learning_rate', type=float, default=0.05)
     parser.add_argument('--loss_temp', type=float, default=0.07)
-    parser.add_argument('--encoder_name', type=str, default='max_pt_scaling_4.h5')
+    parser.add_argument('--encoder_name', type=str, default='max_pt.h5')
+    parser.add_argument('--normalization_type', type=str, default='max_pt')
     args = parser.parse_args()
     
     folder = f"E{args.epochs}_B{args.batch_size}_L{args.learning_rate}_T{args.loss_temp}_L{args.latent_dim}"
-    folder = "pT_Scaling_R4"
-    classifier_main(args.latent_dim, args.encoder_name, folder, args.subset_data_name)
+    folder = "Final_pT"
+    classifier_main(args.training_data_name, args.latent_dim, args.encoder_name, folder, args.normalization_type)
     
     
     
