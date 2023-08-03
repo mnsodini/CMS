@@ -227,6 +227,33 @@ def plot_ROC(predicted_backgrounds, predicted_anomalies, folder, filename, testi
     print(f"ROC Plot saved at '{filename}'")
     
     
+def plot_contrastive_loss(history, folder, filename): 
+    '''
+    Plots training loss for training and validation over epochs and 
+    saves file at filename in folder location
+    '''
+    print("Plotting Loss!")
+    # Deduces trianing and validation loss from Keras history obj
+    training_loss = history.history["contrastive_loss"]
+    validation_loss = history.history["val_contrastive_tracker"]
+    
+    # Plots losses and assigns axises 
+    plt.plot(training_loss, label='Training Loss') 
+    plt.plot(validation_loss, label='Validation Loss')
+    plt.title('Contrastive Loss per Epoch during Training')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.grid(True)
+    
+    # Saves graph to directory + reports success
+    subfolder = os.path.join(os.getcwd(), 'Plots', folder)
+    os.makedirs(subfolder, exist_ok=True)
+    file_path = os.path.join(subfolder, filename)
+    plt.savefig(file_path)
+    plt.close('all')
+    print(f"Loss plots saved at '{filename}'")
+    
     
 def plot_pca_proj(representations, folder, filename, labels, specs = None, anomaly = None):
     '''

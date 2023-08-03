@@ -50,7 +50,6 @@ def zscore_preprocess(input_array):
     '''
     # Loads input as tensor and (μ, σ) constants predetermined from training batch.
     tensor = tf.convert_to_tensor(input_array, dtype = tf.float32)
-    mean = tf.reduce_mean(tensor, axis=1, keepdims=True) 
     normalized_tensor = (tensor - 6.53298295) / 15.2869053
 
     # Masking so unrecorded data remains 0

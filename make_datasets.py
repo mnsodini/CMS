@@ -18,6 +18,7 @@ def make_montecarlo_dataset(sample_size, new_filename, divisions, normalization_
     data = np.load('Data/datasets_-1.npz', mmap_mode='r')
     labels = np.load('Data/background_IDs_-1.npz', mmap_mode='r')
     test_ix = np.random.choice(data['x_test'].shape[0], size=int(sample_size*0.25), replace=False)
+    val_ix = np.random.choice(data['x_test'].shape[0], size=int(sample_size*0.2), replace=False)
 
     if divisions == []: 
         # No divisions -> Randomly selects samples to include in smaller batch
@@ -38,22 +39,27 @@ def make_montecarlo_dataset(sample_size, new_filename, divisions, normalization_
     np.random.shuffle(train_ix) 
     x_train = data['x_train'][train_ix]
     x_test  = data['x_test'][test_ix]
+    x_val   = data['x_val'][val_ix]
     id_train = labels['background_ID_train'][train_ix]
     id_test = labels['background_ID_test'][test_ix]
+    id_val  = labels['background_ID_val'][val_ix]
     
     if normalization_type == 'max_pt':
         # Normalizes train and testing features by dividing by max pT. Saves weights in 'configs.py' file 
         data_preprocessing.save_normalization_weights(x_train, new_filename)
         x_train = data_preprocessing.maxPT_preprocess(x_train, new_filename)
         x_test = data_preprocessing.maxPT_preprocess(x_test, new_filename)
+        x_val = data_preprocessing.maxPT_preprocess(x_val, new_filename)
 
     elif normalization_type == 'zscore': 
         # Normalizes train and testing features by x' = (x - μ) / σ, where μ, σ are predetermined constants
         x_train = data_preprocessing.zscore_preprocess(x_train)
         x_test = data_preprocessing.zscore_preprocess(x_test)
+        x_val = data_preprocessing.zscore_preprocess(x_val)
 
     # Create and save new .npz with extracted features. Reports success 
-    new_dataset = {'x_train': x_train, 'x_test': x_test, 'labels_train': id_train, 'labels_test': id_test}
+    new_dataset = {'x_train': x_train, 'x_test': x_test, 'x_val': x_val, 
+                   'labels_train': id_train, 'labels_test': id_test, 'labels_val': id_val}
     if not os.path.exists('Data'): os.makedirs('Data')
     file_path = os.path.join('Data', new_filename)
     np.savez(file_path, **new_dataset)
@@ -119,20 +125,22 @@ if __name__ == '__main__':
     # Parses terminal command
     parser = ArgumentParser()
     parser.add_argument('--new_filename', type=str, required=True)
-    parser.add_argument('--training_filename', type=str, default='max_pt_scaling.npz')
-    parser.add_argument('--delphes', type=bool, default=False)
     parser.add_argument('--sample_size', type=int, default=500000)
+    parser.add_argument('--use_delphes_data', type=bool, default=True)
+    parser.add_argument('--normalization_type', type=str, default='zscore')
+    
+    # Raw CMS Dataset Specific Args. Ignore if making Delphes subset 
     parser.add_argument('--delphes_filter', type=bool, default=False)
-    parser.add_argument('--normalization_type', type=str, default='max_pt')
+    parser.add_argument('--training_filename', type=str, default='max_pt_dataset.npz')
     args = parser.parse_args()
     
     divisions = []
-#     divisions = [0.30, 0.30, 0.20, 0.20]
+    divisions = [0.30, 0.30, 0.20, 0.20]
     
     print("Creating file now:")
-    if args.delphes == True: 
+    if args.use_delphes_data == True: 
         print("Assuming making a Delphes Data Subset:")
-        make_montecarlo_dataset(args.sample_size, args.filename, divisions, args.normalization_type)
+        make_montecarlo_dataset(args.sample_size, args.new_filename, divisions, args.normalization_type)
     else: 
         print("Assuming making a Raw CMS Dataset:")
         make_raw_cms_dataset(args.delphes_filter, args.new_filename, args.training_filename, args.normalization_type)

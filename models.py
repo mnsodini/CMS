@@ -37,6 +37,25 @@ class CVAE(keras.Model):
         self.contrastive_loss_tracker.update_state(contrastive_loss)
 
         return {"contrastive_loss": self.contrastive_loss_tracker.result()}
+    
+    def test_step(self, data): 
+        # Unpacks the data
+        features, labels = data
+        # Computes latent space representation and loss
+        latent_rep = self.encoder(features, training=False)
+        projection = self.projection_head(latent_rep, training=False)
+        valid_loss = self.contrastive_loss_fn(projection, labels=labels, temperature=self.temperature)
+        
+        # Updates loss metrics 
+        for metric in self.metrics: 
+            if metric.name != "contrastive_loss": 
+                metric.update_state(valid_loss)
+        return {m.name: m.result() for m in self.metrics}
+        
+    def call(self, inputs): 
+        encoded = self.encoder(inputs, training=False)
+        projected = self.projection_head(encoded, training=False)
+        return projected
 
 class VAE(keras.Model):
     '''
