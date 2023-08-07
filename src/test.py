@@ -80,10 +80,11 @@ def test_main(full_data, subset_data_name, latent_dim, epochs, batch_size, learn
         print("==============================")
         print("MAKING RELEVANT TRAINING PLOTS")    
         test_representation = encoder.predict(features_test)
-        graphing_module.plot_2D_pca(test_representation, folder, f'1_2D_PCA.png', labels = labels_test)
-        graphing_module.plot_3D_pca(test_representation, folder, f'1_3D_PCA.png', labels = labels_test)
-        graphing_module.plot_corner_plots(test_representation, folder, f'1_Latent_Corner_Plots.png', labels_test, plot_pca=False)
-        graphing_module.plot_corner_plots(test_representation, folder, f'1_PCA_Corner_Plots.png', labels_test, plot_pca=True)
+        #graphing_module.plot_2D_pca(test_representation, folder, f'1_2D_PCA.png', labels = labels_test)
+        #graphing_module.plot_3D_pca(test_representation, folder, f'1_3D_PCA.png', labels = labels_test)
+        graphing_module.plot_tSNE(test_representation, folder, f'1_tSNE.png', labels = labels_test)
+        #graphing_module.plot_corner_plots(test_representation, folder, f'1_Latent_Corner_Plots.png', labels_test, plot_pca=False)
+        #graphing_module.plot_corner_plots(test_representation, folder, f'1_PCA_Corner_Plots.png', labels_test, plot_pca=True)
 
     if anomaly: 
         print("=============================")
@@ -114,6 +115,7 @@ def test_main(full_data, subset_data_name, latent_dim, epochs, batch_size, learn
 
 #             graphing_module.plot_2D_pca(mixed_representation, folder, f'2_{key}_2D_PCA.png', labels=mixed_labels, anomaly=key)
 #             graphing_module.plot_3D_pca(mixed_representation, folder, f'2_{key}_3D_PCA.png', labels=mixed_labels, anomaly=key) 
+            graphing_module.plot_tSNE(mixed_representation, folder, f'2_{key}_tSNE.png', labels=mixed_labels, anomaly=key)
             graphing_module.plot_corner_plots(mixed_representation, folder, f'2_{key}_Corner_Plot.png', mixed_labels, True, key)
       
     
@@ -125,21 +127,21 @@ if __name__ == '__main__':
     parser.add_argument('--full_data', type=bool, default=False)
     
     # If using full data, must specify type of normalization intend to use 
-    parser.add_argument('--normalization_type', type=str, default='max_pt')
+    parser.add_argument('--normalization_type', type=str, default='zscore')
     
     # If not using full data, name of smaller dataset to pull from 
-    parser.add_argument('--subset_data_name', type=str, default='max_pt.npz') 
+    parser.add_argument('--subset_data_name', type=str, default='zscore.npz') 
     
-    parser.add_argument('--latent_dim', type=int, default=8)
+    parser.add_argument('--latent_dim', type=int, default=6)
     parser.add_argument('--epochs', type=int, default=1)
     parser.add_argument('--batch_size', type=int, default=1000)
     parser.add_argument('--learning_rate', type=float, default=0.011)
     parser.add_argument('--loss_temp', type=float, default=0.07)
-    parser.add_argument('--encoder_name', type=str, default='max_pt.h5')
+    parser.add_argument('--encoder_name', type=str, default='zscore.h5')
     
-    parser.add_argument('--train', type=bool, default=True)
-    parser.add_argument('--plot', type=bool, default=True)
-    parser.add_argument('--anomaly', type=bool, default=True)
+    parser.add_argument('--train', type=bool, default=False)
+    parser.add_argument('--plot', type=bool, default=False)
+    parser.add_argument('--anomaly', type=bool, default=False)
     
     # If making anomaly graphs, int representing the maximum number of smaples to include from the background 
     parser.add_argument('--anomaly_graph_subset', type=bool, default=False)

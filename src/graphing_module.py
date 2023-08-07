@@ -4,6 +4,7 @@ import corner
 import numpy as np 
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
+from sklearn.manifold import TSNE 
 from sklearn.decomposition import PCA 
 from sklearn.metrics import roc_curve, auc
 
@@ -260,45 +261,45 @@ def plot_contrastive_loss(history, folder, filename):
     print(f"Loss plots saved at '{filename}'")
     
     
-def plot_pca_proj(representations, folder, filename, labels, specs = None, anomaly = None):
+def plot_tSNE(representations, folder, filename, labels, anomaly = None):
     '''
-    Creates histogram of four primary PCA Components. Color code histograms based on labels
+    Creates 2D plots of two primary tsne components. Save plot in folder
     '''
-    print("Plotting PCA Projection Plots!")
+    print("Plotting 2D tSNE plots!")
+    
     # Perform PCA to extract the 3 prin. components
-    pca = PCA(n_components=4)
-    components = pca.fit_transform(representations)
-    fig, axs = plt.subplots(2, 2, figsize=(12,18))
+    tsne = TSNE(n_components=2)
+    components = tsne.fit_transform(representations)
     
+    # Create dictionaries to associate labels with human-readable names and colors
     unique_labels = np.unique(labels)
-    index_mapping = {label: np.where(labels == label)[0] for label in unique_labels}
-    
     name_mapping = {0.0: "W-Boson", 1.0: "QCD", 2.0: "Z_2", 3.0: "tt", 4.0: anomaly}
     default_colors = {0.0:'#1f77b4', 1.0:'#ff7f0e', 2.0:'#2ca02c', 3.0:'#d62728', 4.0:'#9467bd'}
     anomaly_colors = {0.0:'#00C142', 1.0:'#44CBB7', 2.0:'#4457CB', 3.0:'#8B15E4', 4.0:'#C01E1E'}
 
-    # Plots histogram per label on same subplot
-    for ix, ax in enumerate(axs.flatten()): 
-        for label in unique_labels: 
-            if anomaly is not None: color = anomaly_colors[label]
-            else: color = default_colors[label]
-            name = name_mapping[label]
-            ax.hist(components[index_mapping[label], ix], bins=100, alpha=0.75, label=name, color=color)
-        ax.legend()
-        ax.set_ylabel("Frequency")
-        ax.set_xlabel(f"Principal Component {ix+1}")
+    # Iterate over unique labels and plot associated data 
+    for label in unique_labels: 
+        mask = np.where(labels == label)[0]
+        # Colors based on whether plotting anomaly for legibility  
+        if anomaly is not None: color = anomaly_colors[label]
+        else: color = default_colors[label]
+        name = name_mapping[label]
+        plt.scatter(components[mask, 0], components[mask, 1], label=name, color=color, alpha=0.5, s=0.3)
     
-    # Saves graph to directory + reports success    
-    if specs is not None: fig.suptitle(f'PCA Projections E: {specs[0]} BS: {specs[1]} LR: {specs[2]}')
-    elif anomaly is not None: fig.suptitle(f"PCA Projections with '{anomaly}' anomaly")
-    else: fig.suptitle('PCA Projections')
-                             
+    # Define plot attributes and labeling
+    plt.title("t-SNE Plot per Label")
+    plt.xlabel("t-SNE Component 1")
+    plt.ylabel("t-SNE Component 2")
+    leg = ax.legend(markerscale = 3.0, loc='upper right')
+    for lh in leg.legendHandles: lh.set_alpha(1) 
+             
+    # Saves plot in proper directory and reports success
     subfolder = os.path.join(os.path.dirname(__file__), '..', 'plots')
     subfolder = os.path.join(os.getcwd(), subfolder, folder)
     os.makedirs(subfolder, exist_ok=True)
     file_path = os.path.join(subfolder, filename)
     plt.savefig(file_path)
     plt.close('all')
-    print(f"PCA projection plot saved at '{filename}'")
+    print(f"2D tSNE Plots saved at '{filename}'")
     
     
