@@ -14,7 +14,7 @@ from argparse import ArgumentParser
 from tensorflow.keras.callbacks import (EarlyStopping, ReduceLROnPlateau)
 
 def test_main(full_data, subset_data_name, latent_dim, epochs, batch_size, learning_rate, loss_temp, 
-              encoder_name, train, plot, anomaly, anomaly_graph_subset, normalization_type): 
+              encoder_name, train, plot, anomaly, plot_anomaly_subset, normalization_type): 
     '''Infastructure for training and plotting CVAE (background specific and with anomalies)'''
     print("=========================")
     print("PULLING DATA FOR TRAINING")
@@ -41,7 +41,7 @@ def test_main(full_data, subset_data_name, latent_dim, epochs, batch_size, learn
         labels_dataset = np.load('../data/background_IDs_-1.npz')
         labels_train = tf.reshape(labels_dataset['background_ID_train'], (-1, 1))
         labels_test = tf.reshape(labels_dataset['background_ID_test'], (-1, 1))
-        labels_test = tf.reshape(labels_dataset['background_ID_val'], (-1, 1))
+        labels_valid = tf.reshape(labels_dataset['background_ID_val'], (-1, 1))
         fileanme = 'datasets_-1.npz'
         
     else: # Otherwise use biased batch dataset [0.3 W, 0.3 QCD, 0.2 Z, 0.2 tt]
@@ -54,8 +54,8 @@ def test_main(full_data, subset_data_name, latent_dim, epochs, batch_size, learn
         labels_valid = tf.reshape(features_dataset['labels_val'], (-1, 1))
         filename = subset_data_name
         
-        folder = f"{epochs}_BatchSize_{batch_size}_LearningRate_{learning_rate}_Temp_{loss_temp}_LatentDim_{latent_dim}"
-        folder = "Final_pT"
+    folder = f"{epochs}_BatchSize_{batch_size}_LearningRate_{learning_rate}_Temp_{loss_temp}_LatentDim_{latent_dim}"
+    folder = "final_zscore"
     
     if train: 
         # Creates CVAE and trains on training data. Saves encoder 
@@ -82,9 +82,9 @@ def test_main(full_data, subset_data_name, latent_dim, epochs, batch_size, learn
         test_representation = encoder.predict(features_test)
         #graphing_module.plot_2D_pca(test_representation, folder, f'1_2D_PCA.png', labels = labels_test)
         #graphing_module.plot_3D_pca(test_representation, folder, f'1_3D_PCA.png', labels = labels_test)
-        graphing_module.plot_tSNE(test_representation, folder, f'1_tSNE.png', labels = labels_test)
-        #graphing_module.plot_corner_plots(test_representation, folder, f'1_Latent_Corner_Plots.png', labels_test, plot_pca=False)
-        #graphing_module.plot_corner_plots(test_representation, folder, f'1_PCA_Corner_Plots.png', labels_test, plot_pca=True)
+        #graphing_module.plot_tSNE(test_representation, folder, f'1_tSNE.png', labels = labels_test)
+        graphing_module.plot_corner_plots(test_representation, folder, f'1_Latent_Corner_Plots.png', labels_test, plot_pca=False)
+        graphing_module.plot_corner_plots(test_representation, folder, f'1_PCA_Corner_Plots.png', labels_test, plot_pca=True)
 
     if anomaly: 
         print("=============================")
@@ -93,18 +93,29 @@ def test_main(full_data, subset_data_name, latent_dim, epochs, batch_size, learn
         background_representation = encoder.predict(features_test)
         background_labels = tf.cast(labels_test, dtype=tf.float32)
         
-        if anomaly_graph_subset: 
+        if plot_anomaly_subset: 
             print("sampling subset of background")
             # Pulls random subset of background to include in anomaly plots
-            shuffled_background_indices = tf.random.shuffle(background_indices)[:500000]
+            background_indices = tf.range(start=0, limit=background_labels.shape[0], dtype=tf.int32)
+            shuffled_background_indices = tf.random.shuffle(background_indices)[:1000000]
             background_representation = tf.gather(background_representation, shuffled_background_indices)
             background_labels = tf.gather(background_labels, shuffled_background_indices)
-
+         
         for key in anomaly_dataset.keys(): 
             print(f"making plots for {key} anomaly")
-            # Compute anomaly representations and define anomaly labels
-#             anomaly_representation = data_preprocessing.maxPT_preprocess(anomaly_dataset[key], subset_data_name)
-            anomaly_representation = data_preprocessing.zscore_preprocess(anomaly_dataset[key])
+            # Preprocess anomalous data in same manner as background 
+            if normalization_type == 'max_pt': 
+                anomaly_representation = data_preprocessing.maxPT_preprocess(anomaly_dataset[key], subset_data_name)
+            elif normalization_type == 'zscore':
+                anomaly_representation = data_preprocessing.zscore_preprocess(anomaly_dataset[key])
+                
+            # Pulls random subset of anomalous data to include in anomaly plots for legibility 
+            if plot_anomaly_subset: 
+                anomaly_indices = tf.range(start=0, limit=anomaly_representation.shape[0], dtype=tf.int32)
+                shuffled_anomaly_indices = tf.random.shuffle(anomaly_indices)[:min(70000, anomaly_representation.shape[0])]
+                anomaly_representation = tf.gather(anomaly_representation, shuffled_anomaly_indices)
+                
+            # Predicts anomaly using encoder and defines anomalous labels as 4.0
             anomaly_representation = encoder.predict(anomaly_representation)
             anomaly_labels = tf.fill((anomaly_representation.shape[0], 1), 4.0)
             anomaly_labels = tf.cast(anomaly_labels, dtype=tf.float32)
@@ -113,9 +124,9 @@ def test_main(full_data, subset_data_name, latent_dim, epochs, batch_size, learn
             mixed_representation = np.concatenate([anomaly_representation, background_representation], axis=0)
             mixed_labels = tf.concat([anomaly_labels, background_labels], axis=0)
 
-#             graphing_module.plot_2D_pca(mixed_representation, folder, f'2_{key}_2D_PCA.png', labels=mixed_labels, anomaly=key)
-#             graphing_module.plot_3D_pca(mixed_representation, folder, f'2_{key}_3D_PCA.png', labels=mixed_labels, anomaly=key) 
-            graphing_module.plot_tSNE(mixed_representation, folder, f'2_{key}_tSNE.png', labels=mixed_labels, anomaly=key)
+            #graphing_module.plot_2D_pca(mixed_representation, folder, f'2_{key}_2D_PCA.png', labels=mixed_labels, anomaly=key)
+            #graphing_module.plot_3D_pca(mixed_representation, folder, f'2_{key}_3D_PCA.png', labels=mixed_labels, anomaly=key) 
+            #graphing_module.plot_tSNE(mixed_representation, folder, f'2_{key}_tSNE.png', labels=mixed_labels, anomaly=key)
             graphing_module.plot_corner_plots(mixed_representation, folder, f'2_{key}_Corner_Plot.png', mixed_labels, True, key)
       
     
@@ -133,22 +144,22 @@ if __name__ == '__main__':
     parser.add_argument('--subset_data_name', type=str, default='zscore.npz') 
     
     parser.add_argument('--latent_dim', type=int, default=6)
-    parser.add_argument('--epochs', type=int, default=1)
-    parser.add_argument('--batch_size', type=int, default=1000)
-    parser.add_argument('--learning_rate', type=float, default=0.011)
+    parser.add_argument('--epochs', type=int, default=20)
+    parser.add_argument('--batch_size', type=int, default=1024)
+    parser.add_argument('--learning_rate', type=float, default=0.031)
     parser.add_argument('--loss_temp', type=float, default=0.07)
     parser.add_argument('--encoder_name', type=str, default='zscore.h5')
     
     parser.add_argument('--train', type=bool, default=False)
     parser.add_argument('--plot', type=bool, default=False)
-    parser.add_argument('--anomaly', type=bool, default=False)
+    parser.add_argument('--anomaly', type=bool, default=True)
     
-    # If making anomaly graphs, int representing the maximum number of smaples to include from the background 
-    parser.add_argument('--anomaly_graph_subset', type=bool, default=False)
+    # Bool representing whether to include only a subset of samples in anomaly plots for legibility
+    parser.add_argument('--plot_anomaly_subset', type=bool, default=True)
     
     args = parser.parse_args()
     test_main(args.full_data, args.subset_data_name, args.latent_dim, args.epochs, args.batch_size, args.learning_rate, 
-              args.loss_temp, args.encoder_name, args.train, args.plot, args.anomaly, args.anomaly_graph_subset, 
+              args.loss_temp, args.encoder_name, args.train, args.plot, args.anomaly, args.plot_anomaly_subset, 
               args.normalization_type)
 
         
