@@ -2,11 +2,11 @@ print("Importing from 'make_datasets.py'")
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+import tensorflow as tf
 import h5py
 import numpy as np
 import data_preprocessing
 from argparse import ArgumentParser
-import tensorflow as tf
 
 def make_montecarlo_dataset(sample_size, new_filename, divisions, normalization_type): 
     '''
@@ -137,7 +137,6 @@ if __name__ == '__main__':
     parser.add_argument('--training_filename', type=str, default='max_pt_dataset.npz')
     args = parser.parse_args()
     
-    divisions = []
     divisions = [0.30, 0.30, 0.20, 0.20]
     
     print("Creating file now:")

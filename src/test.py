@@ -55,7 +55,6 @@ def test_main(full_data, subset_data_name, latent_dim, epochs, batch_size, learn
         filename = subset_data_name
         
     folder = f"{epochs}_BatchSize_{batch_size}_LearningRate_{learning_rate}_Temp_{loss_temp}_LatentDim_{latent_dim}"
-    folder = "final_zscore"
     
     if train: 
         # Creates CVAE and trains on training data. Saves encoder 
@@ -66,7 +65,6 @@ def test_main(full_data, subset_data_name, latent_dim, epochs, batch_size, learn
         CVAE.compile(optimizer=keras.optimizers.Adam(learning_rate=learning_rate, amsgrad=True))
         history = CVAE.fit(features_train, labels_train, epochs=epochs, batch_size=batch_size, callbacks=callbacks,
                            validation_data=(features_valid, labels_valid))
-        graphing_module.plot_contrastive_loss(history, folder, f'0_Loss_Plot.png')
         subfolder = os.path.join(os.path.dirname(__file__), '..', 'model_weights')
         os.makedirs(subfolder, exist_ok=True)
         saved_weights_path = os.path.join(subfolder, encoder_name)
@@ -80,10 +78,11 @@ def test_main(full_data, subset_data_name, latent_dim, epochs, batch_size, learn
         print("==============================")
         print("MAKING RELEVANT TRAINING PLOTS")    
         test_representation = encoder.predict(features_test)
-        #graphing_module.plot_2D_pca(test_representation, folder, f'1_2D_PCA.png', labels = labels_test)
-        #graphing_module.plot_3D_pca(test_representation, folder, f'1_3D_PCA.png', labels = labels_test)
-        #graphing_module.plot_tSNE(test_representation, folder, f'1_tSNE.png', labels = labels_test)
-        graphing_module.plot_corner_plots(test_representation, folder, f'1_Latent_Corner_Plots.png', labels_test, plot_pca=False)
+        graphing_module.plot_2D_pca(test_representation, folder, f'1_2D_PCA.png', labels = labels_test)
+        graphing_module.plot_3D_pca(test_representation, folder, f'1_3D_PCA.png', labels = labels_test)
+        graphing_module.plot_tSNE(test_representation, folder, f'1_tSNE.png', labels = labels_test)
+        graphing_module.plot_corner_plots(test_representation, folder, f'1_Latent_Corner_Plots.png', 
+                                          labels_test, plot_pca=False)
         graphing_module.plot_corner_plots(test_representation, folder, f'1_PCA_Corner_Plots.png', labels_test, plot_pca=True)
 
     if anomaly: 
@@ -124,8 +123,8 @@ def test_main(full_data, subset_data_name, latent_dim, epochs, batch_size, learn
             mixed_representation = np.concatenate([anomaly_representation, background_representation], axis=0)
             mixed_labels = tf.concat([anomaly_labels, background_labels], axis=0)
 
-            #graphing_module.plot_2D_pca(mixed_representation, folder, f'2_{key}_2D_PCA.png', labels=mixed_labels, anomaly=key)
-            #graphing_module.plot_3D_pca(mixed_representation, folder, f'2_{key}_3D_PCA.png', labels=mixed_labels, anomaly=key) 
+            graphing_module.plot_2D_pca(mixed_representation, folder, f'2_{key}_2D_PCA.png', labels=mixed_labels, anomaly=key)
+            graphing_module.plot_3D_pca(mixed_representation, folder, f'2_{key}_3D_PCA.png', labels=mixed_labels, anomaly=key) 
             #graphing_module.plot_tSNE(mixed_representation, folder, f'2_{key}_tSNE.png', labels=mixed_labels, anomaly=key)
             graphing_module.plot_corner_plots(mixed_representation, folder, f'2_{key}_Corner_Plot.png', mixed_labels, True, key)
       
@@ -145,14 +144,14 @@ if __name__ == '__main__':
     
     parser.add_argument('--latent_dim', type=int, default=6)
     parser.add_argument('--epochs', type=int, default=20)
-    parser.add_argument('--batch_size', type=int, default=1024)
+    parser.add_argument('--batch_size', type=int, default=25)
     parser.add_argument('--learning_rate', type=float, default=0.031)
     parser.add_argument('--loss_temp', type=float, default=0.07)
     parser.add_argument('--encoder_name', type=str, default='zscore.h5')
     
     parser.add_argument('--train', type=bool, default=False)
     parser.add_argument('--plot', type=bool, default=False)
-    parser.add_argument('--anomaly', type=bool, default=True)
+    parser.add_argument('--anomaly', type=bool, default=False)
     
     # Bool representing whether to include only a subset of samples in anomaly plots for legibility
     parser.add_argument('--plot_anomaly_subset', type=bool, default=True)
