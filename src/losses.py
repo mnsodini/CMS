@@ -44,6 +44,40 @@ def SimCLRLoss(features, labels, temperature = 0.07):
     loss = tf.reduce_mean(loss, axis=0)
     return loss
 
+def VicRegLoss(x, y): 
+    '''
+    Computes VicRegLoss as implemented by Deep 
+    '''
+    # Finds float values of batch_size, dimension
+    N = tf.cast(tf.shape(x)[0], dtype=tf.float32)
+    D = tf.cast(tf.shape(x)[1], dtype=tf.float32)
+    
+    # Calculate invariance term -> mse between x, y pairs
+    invariance_loss = keras.losses.mean_squared_error(x, y)
+    
+    # Calculate variance_loss -> push std over batch of each variable towards γ=1 
+    x_mu = tf.reduce_mean(x, axis=0)
+    y_mu = tf.reduce_mean(y, axis=0)
+    x_std = tf.sqrt(tf.math.reduce_variance(x, axis=0) + 0.0001)
+    y_std = tf.sqrt(tf.math.reduce_variance(y, axis=0) + 0.0001) # 0.0001 term for numberical stability
+    varaince_loss = tf.reduce_mean(tf.maximum(0.0, 1-x_std))/2 + tf.reduce_mean(tf.maximum(0.0, 1-y_std))/2
+    
+    x = (x-x_mu)/x_std
+    y = (y-y_mu)/y_std
+    
+    # Calculate covariance_loss -> pushes cov between variables to 0, prevent info collapse
+    cov_x = tf.matmul(tf.transpose(x), x) / (N-1)
+    cov_y = tf.matmul(tf.transpose(y), y) / (N-1)
+    
+    # Covariance only relevant for off-diagonal elements of x,y
+    off_diag_mask = tf.math.logical_not(tf.eye(N, dtype=tf.bool))
+    x_off_diag = tf.reshape(x[off_diag_mask], (N-1, N+1))[:, 1:]
+    y_off_diag = tf.reshape(y[off_diag_mask], (N-1, N+1))[:, 1:]
+    covariance_loss = tf.reduce_sum(tf.pow(x_off_diag), 2) / D + tf.reduce_sum(tf.pow(y_off_diag), 2) / D
+    
+    # Sums respective loss terms and returns output 
+    return invariance_loss + variance_loss + covariance_loss 
+
 def mse_loss(inputs, outputs):
     return tf.math.reduce_mean(tf.math.square(outputs-inputs), axis=-1)
 
