@@ -30,7 +30,7 @@ def plot_2D_pca(representations, folder, filename, labels = None, anomaly=None, 
             name = name_mappings[label]
             indices = np.where(labels == label)[0]
             if anomaly is not None: 
-                if label != 4.0: alpha, color = 0.025, anomaly_colors[label]
+                if label != 4.0: alpha, color = 1, anomaly_colors[label]
                 else: alpha, color = 0.0125, anomaly_colors[label]
             else: alpha, color = 0.050, default_colors[label]
             plt.scatter(components[indices, 0], components[indices, 1], label=name, alpha=0.05, c=color, s=0.7)
@@ -55,7 +55,6 @@ def plot_2D_pca(representations, folder, filename, labels = None, anomaly=None, 
     plt.close('all')
     print(f"2D PCA plot saved at '{filename}'")
 
-    
     
 def plot_3D_pca(representations, folder, filename, labels = None, anomaly = None, specs = None):
     '''
@@ -156,9 +155,10 @@ def plot_corner_plots(sample_representations, folder, filename, sample_labels, p
 
     plot_range = []
     for dim in range(num_dims): # Finds min and max range in each dim for histogram plots
-            plot_range.append([-5,5,])
-#         plot_range.append([1.5 * min([min(representations[i].T[dim]) for i in range(num_labels)]),
-#                            1.5 * max([max(representations[i].T[dim]) for i in range(num_labels)]),])
+        plot_range.append([-6,6,])
+        #plot_range.append([2 * min([min(representations[i].T[dim]) for i in range(num_labels)]),
+                           #2 * max([max(representations[i].T[dim]) for i in range(num_labels)]),])
+    
     CORNER_KWARGS.update(range=plot_range) # Plots first rep to define baseline plot
     fig = corner.corner(representations[0], color=colors[0], **CORNER_KWARGS,
                         weights=normalize_weights(len(representations[0]), max_rep_count))

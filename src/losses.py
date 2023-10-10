@@ -60,7 +60,7 @@ def VicRegLoss(x, y):
     y_mu = tf.reduce_mean(y, axis=0)
     x_std = tf.sqrt(tf.math.reduce_variance(x, axis=0) + 0.0001)
     y_std = tf.sqrt(tf.math.reduce_variance(y, axis=0) + 0.0001) # 0.0001 term for numberical stability
-    varaince_loss = tf.reduce_mean(tf.maximum(0.0, 1-x_std))/2 + tf.reduce_mean(tf.maximum(0.0, 1-y_std))/2
+    variance_loss = tf.reduce_mean(tf.maximum(0.0, 1-x_std))/2 + tf.reduce_mean(tf.maximum(0.0, 1-y_std))/2
     
     x = (x-x_mu)/x_std
     y = (y-y_mu)/y_std
@@ -69,14 +69,23 @@ def VicRegLoss(x, y):
     cov_x = tf.matmul(tf.transpose(x), x) / (N-1)
     cov_y = tf.matmul(tf.transpose(y), y) / (N-1)
     
-    # Covariance only relevant for off-diagonal elements of x,y
-    off_diag_mask = tf.math.logical_not(tf.eye(N, dtype=tf.bool))
-    x_off_diag = tf.reshape(x[off_diag_mask], (N-1, N+1))[:, 1:]
-    y_off_diag = tf.reshape(y[off_diag_mask], (N-1, N+1))[:, 1:]
-    covariance_loss = tf.reduce_sum(tf.pow(x_off_diag), 2) / D + tf.reduce_sum(tf.pow(y_off_diag), 2) / D
+    # Covariance loss only relevant for off diagonal entries of Σ 
+    off_diag_mask = tf.math.logical_not(tf.eye(D, dtype=tf.bool))
+    x_off_diag = tf.reshape(cov_x[off_diag_mask], [-1])
+    y_off_diag = tf.reshape(cov_y[off_diag_mask], [-1])
+    covariance_loss = tf.reduce_sum(tf.pow(x_off_diag, 2)) / D + tf.reduce_sum(tf.pow(y_off_diag, 2)) / D
     
     # Sums respective loss terms and returns output 
     return invariance_loss + variance_loss + covariance_loss 
+
+def off_diagonal(x): 
+    '''Returns off diagonal elts of square tensor as a 1-D tensor'''
+    N = tf.cast(tf.shape(x)[0], dtype=tf.float32)
+    x_flattened = tf.reshape(x, [-1])
+    x_trimmed = x_flattened[:-1]
+    x_reshaped = tf.reshape(x_trimmed, [N-1, N+1])
+    x_selected = x_reshaped[:, 1:]
+    return tf.reshape(x_selected, [-1])
 
 def mse_loss(inputs, outputs):
     return tf.math.reduce_mean(tf.math.square(outputs-inputs), axis=-1)

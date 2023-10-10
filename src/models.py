@@ -10,12 +10,13 @@ class CVAE(keras.Model):
     Creates fully supervised CVAE Class 
     Training architecture: input -> latent space μ representation -> Proj(μ) -> contrastive loss 
     '''
-    def __init__(self, contrastive_loss, temp = 0.07, latent_dim=8, **kwargs):
+    def __init__(self, contrastive_loss, temp = 0.07, latent_dim=8, loss_type='SimCLR', **kwargs):
         super().__init__(**kwargs)
         self.latent_dim = latent_dim
         self.encoder = build_encoder(self.latent_dim)
         self.projection_head = build_projection_head(self.latent_dim)
         self.temperature = temp
+        self.loss_type = loss_type
         self.contrastive_loss_fn = contrastive_loss
         self.contrastive_loss_tracker = keras.metrics.Mean(name="contrastive_tracker")
 
@@ -26,11 +27,17 @@ class CVAE(keras.Model):
     def train_step(self, inputs):
         with tf.GradientTape() as tape:
             # Foward pass to create reconstruction + computes loss
-            data, labels = inputs
-            z_mean = self.encoder(data, training=True)
-            projection = self.projection_head(z_mean, training=True)
-            contrastive_loss = self.contrastive_loss_fn(projection, labels=labels, temperature=self.temperature)
-            
+            if self.loss_type == 'SimCLR': 
+                data, labels = inputs
+                z_mean = self.encoder(data, training=True)
+                projection = self.projection_head(z_mean, training=True)
+                contrastive_loss = self.contrastive_loss_fn(projection, labels=labels, temperature=self.temperature)
+                
+            if self.loss_type == 'VicReg': 
+                z_mean = self.encoder(inputs, training=True)
+                projection = self.projection_head(z_mean, training=True)
+                contrastive_loss = self.contrastive_loss_fn(projection, projection)
+                
         # Apply gradients and update losses
         grads = tape.gradient(contrastive_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
@@ -39,13 +46,19 @@ class CVAE(keras.Model):
         return {"contrastive_loss": self.contrastive_loss_tracker.result()}
     
     def test_step(self, data): 
-        # Unpacks the data
-        features, labels = data
-        # Computes latent space representation and loss
-        latent_rep = self.encoder(features, training=False)
-        projection = self.projection_head(latent_rep, training=False)
-        valid_loss = self.contrastive_loss_fn(projection, labels=labels, temperature=self.temperature)
-        
+        if self.loss_type == 'SimCLR':
+            # Unpacks the data
+            features, labels = data
+            # Computes latent space representation and loss
+            latent_rep = self.encoder(features, training=False)
+            projection = self.projection_head(latent_rep, training=False)
+            valid_loss = self.contrastive_loss_fn(projection, labels=labels, temperature=self.temperature)
+            
+        if self.loss_type == 'VicReg':
+            latent_rep = self.encoder(data, training=False)
+            projection = self.projection_head(latent_rep, training=False)
+            valid_loss = self.contrastive_loss_fn(projection, projection)
+            
         # Updates loss metrics 
         for metric in self.metrics: 
             if metric.name != "contrastive_loss": 
